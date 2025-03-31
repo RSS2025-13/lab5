@@ -19,19 +19,19 @@ np.set_printoptions(threshold=sys.maxsize)
 class SensorModel:
 
     def __init__(self, node):
-        # node.declare_parameter('map_topic', "default")
-        # node.declare_parameter('num_beams_per_particle', 1)
-        # node.declare_parameter('scan_theta_discretization', 1.0)
-        # node.declare_parameter('scan_field_of_view', 1.0)
-        # node.declare_parameter('lidar_scale_to_map_scale', 1.0)
+        node.declare_parameter('map_topic', "default")
+        node.declare_parameter('num_beams_per_particle', 1)
+        node.declare_parameter('scan_theta_discretization', 1.0)
+        node.declare_parameter('scan_field_of_view', 1.0)
+        node.declare_parameter('lidar_scale_to_map_scale', 1.0)
 
-        # self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
-        # self.num_beams_per_particle = node.get_parameter('num_beams_per_particle').get_parameter_value().integer_value
-        # self.scan_theta_discretization = node.get_parameter(
-        #     'scan_theta_discretization').get_parameter_value().double_value
-        # self.scan_field_of_view = node.get_parameter('scan_field_of_view').get_parameter_value().double_value
-        # self.lidar_scale_to_map_scale = node.get_parameter(
-        #     'lidar_scale_to_map_scale').get_parameter_value().double_value
+        self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
+        self.num_beams_per_particle = node.get_parameter('num_beams_per_particle').get_parameter_value().integer_value
+        self.scan_theta_discretization = node.get_parameter(
+            'scan_theta_discretization').get_parameter_value().double_value
+        self.scan_field_of_view = node.get_parameter('scan_field_of_view').get_parameter_value().double_value
+        self.lidar_scale_to_map_scale = node.get_parameter(
+            'lidar_scale_to_map_scale').get_parameter_value().double_value
 
         ####################################
         # Adjust these parameters
@@ -45,31 +45,31 @@ class SensorModel:
         self.table_width = 201 #= zmax
         ####################################
 
-        # node.get_logger().info("%s" % self.map_topic)
-        # node.get_logger().info("%s" % self.num_beams_per_particle)
-        # node.get_logger().info("%s" % self.scan_theta_discretization)
-        # node.get_logger().info("%s" % self.scan_field_of_view)
+        node.get_logger().info("%s" % self.map_topic)
+        node.get_logger().info("%s" % self.num_beams_per_particle)
+        node.get_logger().info("%s" % self.scan_theta_discretization)
+        node.get_logger().info("%s" % self.scan_field_of_view)
 
         # Precompute the sensor model table
         self.sensor_model_table = np.empty((self.table_width, self.table_width))
         self.precompute_sensor_model()
 
         # Create a simulated laser scan
-        # self.scan_sim = PyScanSimulator2D(
-        #     self.num_beams_per_particle,
-        #     self.scan_field_of_view,
-        #     0,  # This is not the simulator, don't add noise
-        #     0.01,  # This is used as an epsilon
-        #     self.scan_theta_discretization)
+        self.scan_sim = PyScanSimulator2D(
+            self.num_beams_per_particle,
+            self.scan_field_of_view,
+            0,  # This is not the simulator, don't add noise
+            0.01,  # This is used as an epsilon
+            self.scan_theta_discretization)
 
-        # # Subscribe to the map
-        # self.map = None
-        # self.map_set = False
-        # self.map_subscriber = node.create_subscription(
-        #     OccupancyGrid,
-        #     self.map_topic,
-        #     self.map_callback,
-        #     1)
+        # Subscribe to the map
+        self.map = None
+        self.map_set = False
+        self.map_subscriber = node.create_subscription(
+            OccupancyGrid,
+            self.map_topic,
+            self.map_callback,
+            1)
 
     def precompute_sensor_model(self):
         """
@@ -170,7 +170,23 @@ class SensorModel:
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
 
+        def clip_to_zmax(arr):
+            return np.floor(np.clip(arr,0,z_max)).astype(int)
+
         scans = self.scan_sim.scan(particles)
+        z_max = self.table_width - 1
+        scale_factor = self.resolution  * self.lidar_scale_to_map_scale
+
+        scans /= scale_factor
+        scans = clip_to_zmax(scans)
+        observation /= scale_factor
+        observation = clip_to_zmax(observation)
+
+        idxs = (scans, observation)
+        all_probs = self.sensor_model_table[idxs]
+        # multiply probs for cumulative likelihood for each particle
+        probs = np.prod(all_probs, axis=1)
+        return probs
 
         ####################################
 
