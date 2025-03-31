@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 
 class MotionModel:
 
-    def __init__(self, node):
+    def __init__(self, std_dev_, node):
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
 
-        pass
+        self.std_dev = std_dev_
 
         ####################################
 
@@ -38,8 +38,7 @@ class MotionModel:
         #--------------------
         particles = _particles[:,:]
         #proportional to odometry?
-        std_dev = 0.05
-        particles += np.random.normal(0,std_dev,size=particles.shape)
+        particles += np.random.normal(0,self.std_dev,size=particles.shape)
         #--------------------
         angles = particles[:,2]
         num_particles = particles.shape[0]
