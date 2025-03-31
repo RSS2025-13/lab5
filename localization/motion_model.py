@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 
 class MotionModel:
 
-    def __init__(self, node):
+    def __init__(self, std_dev_, node):
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
 
-        pass
+        self.std_dev = std_dev_
 
         ####################################
 

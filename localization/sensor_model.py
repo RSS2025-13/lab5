@@ -1,13 +1,17 @@
 import numpy as np
-from scan_simulator_2d import PyScanSimulator2D
-# Try to change to just `from scan_simulator_2d import PyScanSimulator2D` 
-# if any error re: scan_simulator_2d occurs
+# from scan_simulator_2d import PyScanSimulator2D
+# # Try to change to just `from scan_simulator_2d import PyScanSimulator2D` 
+# # if any error re: scan_simulator_2d occurs
 
-from tf_transformations import euler_from_quaternion
+# from tf_transformations import euler_from_quaternion
 
-from nav_msgs.msg import OccupancyGrid
+# from nav_msgs.msg import OccupancyGrid
 
 import sys
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -15,19 +19,19 @@ np.set_printoptions(threshold=sys.maxsize)
 class SensorModel:
 
     def __init__(self, node):
-        node.declare_parameter('map_topic', "default")
-        node.declare_parameter('num_beams_per_particle', 1)
-        node.declare_parameter('scan_theta_discretization', 1.0)
-        node.declare_parameter('scan_field_of_view', 1.0)
-        node.declare_parameter('lidar_scale_to_map_scale', 1.0)
+        # node.declare_parameter('map_topic', "default")
+        # node.declare_parameter('num_beams_per_particle', 1)
+        # node.declare_parameter('scan_theta_discretization', 1.0)
+        # node.declare_parameter('scan_field_of_view', 1.0)
+        # node.declare_parameter('lidar_scale_to_map_scale', 1.0)
 
-        self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
-        self.num_beams_per_particle = node.get_parameter('num_beams_per_particle').get_parameter_value().integer_value
-        self.scan_theta_discretization = node.get_parameter(
-            'scan_theta_discretization').get_parameter_value().double_value
-        self.scan_field_of_view = node.get_parameter('scan_field_of_view').get_parameter_value().double_value
-        self.lidar_scale_to_map_scale = node.get_parameter(
-            'lidar_scale_to_map_scale').get_parameter_value().double_value
+        # self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
+        # self.num_beams_per_particle = node.get_parameter('num_beams_per_particle').get_parameter_value().integer_value
+        # self.scan_theta_discretization = node.get_parameter(
+        #     'scan_theta_discretization').get_parameter_value().double_value
+        # self.scan_field_of_view = node.get_parameter('scan_field_of_view').get_parameter_value().double_value
+        # self.lidar_scale_to_map_scale = node.get_parameter(
+        #     'lidar_scale_to_map_scale').get_parameter_value().double_value
 
         ####################################
         # Adjust these parameters
@@ -38,34 +42,34 @@ class SensorModel:
         self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
-        self.table_width = 201
+        self.table_width = 201 #= zmax
         ####################################
 
-        node.get_logger().info("%s" % self.map_topic)
-        node.get_logger().info("%s" % self.num_beams_per_particle)
-        node.get_logger().info("%s" % self.scan_theta_discretization)
-        node.get_logger().info("%s" % self.scan_field_of_view)
+        # node.get_logger().info("%s" % self.map_topic)
+        # node.get_logger().info("%s" % self.num_beams_per_particle)
+        # node.get_logger().info("%s" % self.scan_theta_discretization)
+        # node.get_logger().info("%s" % self.scan_field_of_view)
 
         # Precompute the sensor model table
         self.sensor_model_table = np.empty((self.table_width, self.table_width))
         self.precompute_sensor_model()
 
         # Create a simulated laser scan
-        self.scan_sim = PyScanSimulator2D(
-            self.num_beams_per_particle,
-            self.scan_field_of_view,
-            0,  # This is not the simulator, don't add noise
-            0.01,  # This is used as an epsilon
-            self.scan_theta_discretization)
+        # self.scan_sim = PyScanSimulator2D(
+        #     self.num_beams_per_particle,
+        #     self.scan_field_of_view,
+        #     0,  # This is not the simulator, don't add noise
+        #     0.01,  # This is used as an epsilon
+        #     self.scan_theta_discretization)
 
-        # Subscribe to the map
-        self.map = None
-        self.map_set = False
-        self.map_subscriber = node.create_subscription(
-            OccupancyGrid,
-            self.map_topic,
-            self.map_callback,
-            1)
+        # # Subscribe to the map
+        # self.map = None
+        # self.map_set = False
+        # self.map_subscriber = node.create_subscription(
+        #     OccupancyGrid,
+        #     self.map_topic,
+        #     self.map_callback,
+        #     1)
 
     def precompute_sensor_model(self):
         """
@@ -111,6 +115,28 @@ class SensorModel:
 
         self.sensor_model_table = self.alpha_hit * p_hit + self.alpha_short * p_short + self.alpha_max * p_max + self.alpha_rand * p_rand
         self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
+
+        # for d in range(self.table_width):
+        #     p_hit_column = np.zeros(self.table_width)
+        #     for zk in range(self.table_width):
+        #         p_hit = self.alpha_hit/(np.sqrt(2*np.pi*self.sigma_hit**2))*np.exp(-(zk-d)**2/(2*self.sigma_hit**2))
+        #         p_hit_column[zk] = p_hit
+        #         if zk > 0 and zk <= d:
+        #             p_short = self.alpha_short*2/d*(1-zk/d)
+        #         else:
+        #             p_short = 0
+        #         if zk == self.table_width-1:
+        #             p_max = 1
+        #         else:
+        #             p_max = 0
+        #         p_rand = 1/(self.table_width-1)
+        #         self.sensor_model_table[zk,d] = p_short + p_max + p_rand #everything but to-be-normed p_hit
+        #     #now, normalize p_hit across zk values:
+        #     normed_p_hit_column = p_hit_column/sum(p_hit_column)
+        #     #add normalized distribution to table
+        #     self.sensor_model_table[:,d] += normed_p_hit_column
+        #     #normalize entire column, with total distribution
+        #     self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/sum(self.sensor_model_table[:,d])
 
     def evaluate(self, particles, observation):
         """
@@ -178,3 +204,22 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
+if __name__ == "__main__":
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+
+    x = np.linspace(0, 200, 201)
+    y = np.linspace(0, 200, 201)
+    X, Y = np.meshgrid(x, y)
+
+    sm = SensorModel(None)
+    Z = sm.sensor_model_table
+
+    ax.plot_surface(X, Y, Z, cmap='viridis') 
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+    plt.show()
