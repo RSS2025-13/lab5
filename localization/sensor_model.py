@@ -31,11 +31,11 @@ class SensorModel:
 
         ####################################
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -86,8 +86,31 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
+        z, d = np.indices((self.table_width, self.table_width))
+        z_max = self.table_width - 1
 
-        raise NotImplementedError
+        p_hit = np.zeros((self.table_width, self.table_width))
+        p_short = np.zeros((self.table_width, self.table_width))
+        p_max = np.zeros((self.table_width, self.table_width))
+        p_rand = np.full((self.table_width, self.table_width), 1 / z_max)
+
+        #-------p_hit----------
+        eta = 1
+        p_hit = (np.exp(-(z-d)**2 / (2*self.sigma_hit**2))) * (eta/np.sqrt(2*np.pi*self.sigma_hit**2))
+        p_hit /= np.sum(p_hit, axis = 0)
+
+        #-------p_short---------
+        p_short_idxs = np.where(np.logical_and(z <= d, d != 0))
+        p_short[p_short_idxs] = 2/d[p_short_idxs] * (1 -z[p_short_idxs]/d[p_short_idxs])
+            
+        #------p_max-----------
+        p_max[np.where(z==z_max)] = 1
+            
+        #-------p_rand----------
+        p_rand = 1/z_max
+
+        self.sensor_model_table = self.alpha_hit * p_hit + self.alpha_short * p_short + self.alpha_max * p_max + self.alpha_rand * p_rand
+        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
 
     def evaluate(self, particles, observation):
         """
