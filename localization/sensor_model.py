@@ -173,7 +173,7 @@ class SensorModel:
         def clip_to_zmax(arr):
             return np.floor(np.clip(arr,0,z_max)).astype(int)
 
-        scans = self.scan_sim.scan(particles)
+        scans = self.scan_sim.scan(particles) #NxM, where M is num_beams_per_particle
         z_max = self.table_width - 1
         scale_factor = self.resolution  * self.lidar_scale_to_map_scale
 
@@ -182,6 +182,7 @@ class SensorModel:
         observation /= scale_factor
         observation = clip_to_zmax(observation)
 
+        #????
         idxs = (scans, observation)
         all_probs = self.sensor_model_table[idxs]
         # multiply probs for cumulative likelihood for each particle
