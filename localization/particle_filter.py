@@ -124,7 +124,7 @@ class ParticleFilter(Node):
 
             self.initiated = True
 
-    def mle_pose(particles, probs, percentile = 10):
+    def mle_pose(particles, probs, percentile=10):
         N = len(particles)
         num_top = max(1, int(N * percentile / 100))
 
@@ -144,13 +144,26 @@ class ParticleFilter(Node):
         # Weighted average
         x_avg = sum(p[0] * w for p, w in zip(top_particles, norm_weights))
         y_avg = sum(p[1] * w for p, w in zip(top_particles, norm_weights))
-        
+
         # Circular mean for theta
         sin_sum = sum(np.sin(p[2]) * w for p, w in zip(top_particles, norm_weights))
         cos_sum = sum(np.cos(p[2]) * w for p, w in zip(top_particles, norm_weights))
-        theta_avg = np.atan2(sin_sum, cos_sum)
+        theta_avg = np.arctan2(sin_sum, cos_sum)
 
-        return (x_avg, y_avg, theta_avg)
+        # Compute covariance
+        cov = np.zeros((3, 3))
+        for p, w in zip(top_particles, norm_weights):
+            dx = p[0] - x_avg
+            dy = p[1] - y_avg
+            dtheta = np.arctan2(np.sin(p[2] - theta_avg), np.cos(p[2] - theta_avg))  # shortest angular difference
+
+            delta = np.array([dx, dy, dtheta]).reshape((3, 1))
+            cov += w * (delta @ delta.T)
+
+        return (x_avg, y_avg, theta_avg), cov
+
+
+        #add a covariance value here
 
 def main(args=None):
     rclpy.init(args=args)
