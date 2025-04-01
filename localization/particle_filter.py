@@ -123,34 +123,34 @@ class ParticleFilter(Node):
                 low=[x-0.5, y-0.5, 0], high=[x+0.5, y+0.5, 2*np.pi], size=(100, 3))
 
             self.initiated = True
-            
-def mle_pose(particles, probs, percentile = 10):
-    N = len(particles)
-    num_top = max(1, int(N * percentile / 100))
 
-    # Pair particles with weights and sort
-    pw = list(zip(particles, probs))
-    pw_sorted = sorted(pw, key=lambda x: x[1], reverse=True)
-    top_pw = pw_sorted[:num_top]
+    def mle_pose(particles, probs, percentile = 10):
+        N = len(particles)
+        num_top = max(1, int(N * percentile / 100))
 
-    # Extract top particles and weights
-    top_particles = [p for p, _ in top_pw]
-    top_weights = [w for _, w in top_pw]
+        # Pair particles with weights and sort
+        pw = list(zip(particles, probs))
+        pw_sorted = sorted(pw, key=lambda x: x[1], reverse=True)
+        top_pw = pw_sorted[:num_top]
 
-    # Normalize weights
-    total_weight = sum(top_weights)
-    norm_weights = [w / total_weight for w in top_weights]
+        # Extract top particles and weights
+        top_particles = [p for p, _ in top_pw]
+        top_weights = [w for _, w in top_pw]
 
-    # Weighted average
-    x_avg = sum(p[0] * w for p, w in zip(top_particles, norm_weights))
-    y_avg = sum(p[1] * w for p, w in zip(top_particles, norm_weights))
-    
-    # Circular mean for theta
-    sin_sum = sum(np.sin(p[2]) * w for p, w in zip(top_particles, norm_weights))
-    cos_sum = sum(np.cos(p[2]) * w for p, w in zip(top_particles, norm_weights))
-    theta_avg = np.atan2(sin_sum, cos_sum)
+        # Normalize weights
+        total_weight = sum(top_weights)
+        norm_weights = [w / total_weight for w in top_weights]
 
-    return (x_avg, y_avg, theta_avg)
+        # Weighted average
+        x_avg = sum(p[0] * w for p, w in zip(top_particles, norm_weights))
+        y_avg = sum(p[1] * w for p, w in zip(top_particles, norm_weights))
+        
+        # Circular mean for theta
+        sin_sum = sum(np.sin(p[2]) * w for p, w in zip(top_particles, norm_weights))
+        cos_sum = sum(np.cos(p[2]) * w for p, w in zip(top_particles, norm_weights))
+        theta_avg = np.atan2(sin_sum, cos_sum)
+
+        return (x_avg, y_avg, theta_avg)
 
 def main(args=None):
     rclpy.init(args=args)
