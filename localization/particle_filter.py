@@ -93,6 +93,7 @@ class ParticleFilter(Node):
             new_particles = self.motion_model.evaluate(self.particles, self.odometry)
             probs = self.sensor_model(new_particles, self.scans)
             # Resample particles based on the probabilities
+            self.particles = np.random.choice(new_particles, size=np.shape(new_particles)[0],p=probs)
 
             
     
@@ -101,6 +102,23 @@ class ParticleFilter(Node):
 
     def odom_callback(self, msg):
         self.odometry = [msg.twist.twist.linear.x*self.dT, msg.twist.twist.linear.y*self.dT, msg.twist.twist.angular.z*self.dT]
+    
+    def pose_callback(self, msg):
+        msg_frame_pos = msg.pose.position
+        msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
+
+        msg_frame_quat = msg.pose.orientation
+        msg_frame_quat = [msg_frame_quat.x, msg_frame_quat.y,
+                            msg_frame_quat.z, msg_frame_quat.w]
+        (roll, pitch, yaw) = euler_from_quaternion(msg_frame_quat)
+
+        x = msg_frame_pos[0]+np.cos(yaw)*msg.point.x-np.sin(yaw)*msg.point.y
+        y = msg_frame_pos[1]+np.cos(yaw)*msg.point.y+np.sin(yaw)*msg.point.x
+        #------------
+        covar = np.reshape(msg.pose.covariance, (6,6))
+        #------------
+        self.particles = np.random.multivariate_normal([x,y], covar, size=(100, 3))
+        self.initiated = True
 
     def clicked_callback(self, msg):
         if not self.initiated:
