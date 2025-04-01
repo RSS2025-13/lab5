@@ -11,8 +11,9 @@ from tf_transformations import euler_from_quaternion
 
 from geometry_msgs.msg import PointStamped
 
-assert rclpy
+from visualization_msgs.msg import Marker
 
+assert rclpy
 
 class ParticleFilter(Node):
 
@@ -67,6 +68,7 @@ class ParticleFilter(Node):
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
         self.timer = self.create_timer(self.dT, self.timer_callback)
+        self.marker_pub = self.create_publisher(Marker, "/points", 1)
 
         # Initialize the models
         self.motion_model = MotionModel(self,std_dev_=0.05)
@@ -94,6 +96,7 @@ class ParticleFilter(Node):
             probs = self.sensor_model(new_particles, self.scans)
             # Resample particles based on the probabilities
             self.particles = np.random.choice(new_particles, size=np.shape(new_particles)[0],p=probs)
+            self.draw_marker(self.particles[:,1:2])
 
             
     
@@ -179,7 +182,23 @@ class ParticleFilter(Node):
             cov += w * (delta @ delta.T)
 
         return (x_avg, y_avg, theta_avg), cov
-
+    
+    def draw_marker(self, points):
+        """
+        Publish a marker to represent the cone in rviz
+        """
+        marker = Marker()
+        marker.header.frame_id = self.message_frame
+        marker.type = marker.POINTS
+        marker.action = marker.ADD
+        marker.scale.x = .1
+        marker.scale.y = .1
+        marker.scale.z = .1
+        marker.color.a = 1.0
+        marker.color.r = 1.0
+        marker.color.g = .5
+        marker.points = points
+        self.marker_pub.publish(marker)
 
         #add a covariance value here
 
