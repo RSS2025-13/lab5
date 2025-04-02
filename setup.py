@@ -41,6 +41,8 @@ setup(
             'particle_filter = localization.particle_filter:main',
             'sensor_model_test = localization.test.sensor_model_test:main',
             'motion_model_test = localization.test.motion_model_test:main',
+            'wall_follower = localization.wall_follower:main',
+            'safety_controller = localization.safety_controller:main',
         ],
     },
 
