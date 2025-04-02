@@ -66,7 +66,7 @@ class ParticleFilter(Node):
         self.timer = self.create_timer(self.dT, self.timer_callback)
 
         # Initialize the models
-        self.motion_model = MotionModel(self,std_dev_=0.05)
+        self.motion_model = MotionModel(self,std_dev=0.05)
         self.sensor_model = SensorModel(self)
 
         self.get_logger().info("=============+READY+=============")
