@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 
 class MotionModel:
 
-    def __init__(self, std_dev_, node):
+    def __init__(self, node, std_dev = 0.05, deterministic=False):
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
 
-        self.std_dev = std_dev_
+        self.std_dev = std_dev
+        self.deterministic = deterministic
 
         ####################################
 
@@ -48,9 +49,9 @@ class MotionModel:
             mat[:2, :2] = get_rot_matrix(angle)
             return mat
         
-        #noise
-        odom_noise = np.random.normal(0, 0.04, odometry.shape)
-        odom += odom_noise
+        if not self.deterministic:
+            odom_noise = np.random.normal(0, self.std_dev, odometry.shape)
+            odometry = odometry + odom_noise
 
         # 3N x 3 Matrix (every particles row converted to transform matrix)
         particle_txns = np.apply_along_axis(get_transform_matrix, axis=1, arr=particles)
