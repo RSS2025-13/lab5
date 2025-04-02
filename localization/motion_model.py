@@ -50,6 +50,7 @@ class MotionModel:
             return mat
         
         if not self.deterministic:
+            odometry = np.array(odometry)
             odom_noise = np.random.normal(0, self.std_dev, odometry.shape)
             odometry = odometry + odom_noise
 
