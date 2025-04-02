@@ -129,20 +129,38 @@ class ParticleFilter(Node):
         self.odometry = [msg.twist.twist.linear.x*self.dT, msg.twist.twist.linear.y*self.dT, msg.twist.twist.angular.z*self.dT]
    
     def pose_callback(self, msg):
-        msg_frame_pos = msg.pose.pose.position
-        msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
+        # msg_frame_pos = msg.pose.pose.position
+        # msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
 
-        msg_frame_quat = msg.pose.pose.orientation
-        msg_frame_quat = [msg_frame_quat.x, msg_frame_quat.y,
-                            msg_frame_quat.z, msg_frame_quat.w]
-        (roll, pitch, yaw) = euler_from_quaternion(msg_frame_quat)
+        # msg_frame_quat = msg.pose.pose.orientation
+        # msg_frame_quat = [msg_frame_quat.x, msg_frame_quat.y,
+        #                     msg_frame_quat.z, msg_frame_quat.w]
+        # (roll, pitch, yaw) = euler_from_quaternion(msg_frame_quat)
 
-        x = msg_frame_pos[0]+np.cos(yaw)*msg.point.x-np.sin(yaw)*msg.point.y
-        y = msg_frame_pos[1]+np.cos(yaw)*msg.point.y+np.sin(yaw)*msg.point.x
-        #------------
-        covar = np.reshape(msg.pose.covariance, (6,6))
-        #------------
-        self.particles = np.random.multivariate_normal([x,y], covar, size=(100, 3))
+        # x = msg_frame_pos[0]+np.cos(yaw)*msg.point.x-np.sin(yaw)*msg.point.y
+        # y = msg_frame_pos[1]+np.cos(yaw)*msg.point.y+np.sin(yaw)*msg.point.x
+        # #------------
+        # covar = np.reshape(msg.pose.covariance, (6,6))
+        # #------------
+        # self.particles = np.random.multivariate_normal([x,y], covar, size=(100, 3))
+
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        angle = 2 * np.arctan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+
+        self.get_logger().info(f"first pose at: {x}, {y}, {angle}")
+
+        def normalize_angle(angle):
+            # Normalize the angle to be within the range [-π, π]
+            normalized_angle = (angle + np.pi) % (2 * np.pi) - np.pi
+            return normalized_angle
+        
+        x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
+        y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
+        theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
+        theta = np.apply_along_axis(normalize_angle, axis=0, arr=theta)
+
+        self.particles = np.hstack((x, y, theta))
         self.initiated = True
 
     def mle_average(self, particles, probs, percentile=10):
