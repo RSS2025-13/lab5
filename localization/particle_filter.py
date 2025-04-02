@@ -99,7 +99,7 @@ class ParticleFilter(Node):
         self.listener = tf2_ros.TransformListener(self.buffer, self)
 
     def get_particle_poses(self):
-        # self.get_logger().info(f"par pose {self.particle_poses}")
+        self.get_logger().info(f"par pose: {self.particle_poses}")
         poses = []
         for i in range(len(self.particle_poses)):
             particle = self.particle_poses[i, :]
@@ -195,7 +195,6 @@ class ParticleFilter(Node):
     def odom_callback(self, msg):
         if len(self.particle_poses) == 0: 
             return
-
         curr_time = time.perf_counter()
         dT = curr_time - self.previous_time
 
@@ -214,7 +213,8 @@ class ParticleFilter(Node):
 
         downsampled_indices = np.linspace(0, len(msg.ranges)-1, self.num_beams_per_particle).astype(int)
         downsampled_laser_ranges = np.array(msg.ranges)[downsampled_indices]
-        # downsampled_laser_ranges = np.random.choice(np.array(msg.ranges), self.num_beams_per_particle)
+        #Wonky three lines? KEEP IT LIKE THIS IT WORKS REALLY WELL IN SIM
+        # downsampled_laser_ranges = np.random.choice(np.array(msg.ranges), self.num_beams_per_particle) 
         weights = self.sensor_model.evaluate(self.particle_poses, downsampled_laser_ranges)
         if weights is None or np.sum(weights==0):
             return
@@ -226,7 +226,7 @@ class ParticleFilter(Node):
             return
 
         particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights)
-        self.particle_poses = self.particle_poses[particle_samples_idxs,:] #+ np.random.normal(0, 0.1, self.particle_poses.shape)
+        self.particle_poses = self.particle_poses[particle_samples_idxs,:] + np.random.normal(0, 0.1, self.particle_poses.shape)
 
         self.publish_average_pose()
 
@@ -243,9 +243,11 @@ class ParticleFilter(Node):
             normalized_angle = (angle + np.pi) % (2 * np.pi) - np.pi
             return normalized_angle
         
-        # x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
-        # y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
-        # theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
+        # if not self.motion_model.deterministic:
+        #     x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
+        #     y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
+        #     theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
+        # else:
         x = np.full((self.num_particles, 1), x)
         y = np.full((self.num_particles, 1), y)
         theta = np.full((self.num_particles, 1), theta)
