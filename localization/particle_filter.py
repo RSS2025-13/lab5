@@ -71,6 +71,10 @@ class ParticleFilter(Node):
         self.debug_particles = self.create_publisher(PoseArray, "/pf/particles", 1)
         self.base_link_pub = self.create_publisher()
         self.timer = self.create_timer(self.dT, self.timer_callback)
+        self.broadcaster = tf2_ros.TransformBroadcaster(self)
+
+        self.buffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.buffer, self)
 
         # Initialize the models
         self.motion_model = MotionModel(self,std_dev_=0.05)
