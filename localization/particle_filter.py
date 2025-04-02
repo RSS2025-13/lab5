@@ -7,13 +7,11 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from rclpy.node import Node
 import numpy as np
 
-from tf_transformations import euler_from_quaternion
+from tf_transformations import euler_from_quaternion, quaternion_from_euler
 
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PoseArray, Pose, LaserScan
 
-from visualization_msgs.msg import Marker
-
-assert rclpy
+import rclpy
 
 class ParticleFilter(Node):
 
@@ -31,7 +29,7 @@ class ParticleFilter(Node):
         #     a twist component, you will only be provided with the
         #     twist component, so you should rely only on that
         #     information, and *not* use the pose component.
-        
+       
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
 
@@ -56,9 +54,6 @@ class ParticleFilter(Node):
                                                  self.pose_callback,
                                                  1)
 
-        self.create_subscription(PointStamped,
-            "/clicked_point", self.clicked_callback, 1)
-
         #  *Important Note #3:* You must publish your pose estimate to
         #     the following topic. In particular, you must use the
         #     pose field of the Odometry message. You do not need to
@@ -67,8 +62,8 @@ class ParticleFilter(Node):
         #     "/map" frame.
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
+        self.debug_particles = self.create_publisher(PoseArray, "/pf/particles", 1)
         self.timer = self.create_timer(self.dT, self.timer_callback)
-        self.marker_pub = self.create_publisher(Marker, "/points", 1)
 
         # Initialize the models
         self.motion_model = MotionModel(self,std_dev_=0.05)
@@ -87,7 +82,7 @@ class ParticleFilter(Node):
         # and the particle_filter_frame.
         self.initiated = False
         self.particles = None
-    
+   
 
     def timer_callback(self):
         if self.initiated:
@@ -96,16 +91,26 @@ class ParticleFilter(Node):
             probs = self.sensor_model(new_particles, self.scans)
             # Resample particles based on the probabilities
             self.particles = np.random.choice(new_particles, size=np.shape(new_particles)[0],p=probs)
-            self.draw_marker(self.particles[:,1:2])
 
-            
-    
+            particle_msg = PoseArray()
+            particle_msg.header.frame_id = self.particle_filter_frame
+            particle_msg.header.stamp = self.get_clock().now().to_msg()
+            poses = []
+            for p in self.particles:
+                pose = Pose()
+                pose.position.x = p[0]
+                pose.position.y = p[1]
+                pose.orientation = quaternion_from_euler(0, 0, p[2])
+                poses.append(pose)
+            particle_msg.poses = poses
+            self.debug_particles.publish(particle_msg)            
+   
     def laser_callback(self, msg):
         self.scans = msg.ranges
 
     def odom_callback(self, msg):
         self.odometry = [msg.twist.twist.linear.x*self.dT, msg.twist.twist.linear.y*self.dT, msg.twist.twist.angular.z*self.dT]
-    
+   
     def pose_callback(self, msg):
         msg_frame_pos = msg.pose.position
         msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
@@ -122,28 +127,6 @@ class ParticleFilter(Node):
         #------------
         self.particles = np.random.multivariate_normal([x,y], covar, size=(100, 3))
         self.initiated = True
-
-    def clicked_callback(self, msg):
-        if not self.initiated:
-            # Store clicked point in the map frame
-            t = self.tfBuffer.lookup_transform(
-                self.message_frame, msg.header.frame_id, rclpy.time.Time())
-            
-            msg_frame_pos = t.transform.translation
-            msg_frame_quat = t.transform.rotation
-            msg_frame_quat = [msg_frame_quat.x, msg_frame_quat.y,
-                            msg_frame_quat.z, msg_frame_quat.w]
-            msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
-            
-            (roll, pitch, yaw) = euler_from_quaternion(msg_frame_quat)
-
-            x = msg_frame_pos[0]+np.cos(yaw)*msg.point.x-np.sin(yaw)*msg.point.y
-            y = msg_frame_pos[1]+np.cos(yaw)*msg.point.y+np.sin(yaw)*msg.point.x
-
-            self.particles = np.random.uniform(
-                low=[x-0.5, y-0.5, 0], high=[x+0.5, y+0.5, 2*np.pi], size=(100, 3))
-
-            self.initiated = True
 
     def mle_pose(particles, probs, percentile=10):
         N = len(particles)
@@ -182,24 +165,7 @@ class ParticleFilter(Node):
             cov += w * (delta @ delta.T)
 
         return (x_avg, y_avg, theta_avg), cov
-    
-    def draw_marker(self, points):
-        """
-        Publish a marker to represent the cone in rviz
-        """
-        marker = Marker()
-        marker.header.frame_id = self.message_frame
-        marker.type = marker.POINTS
-        marker.action = marker.ADD
-        marker.scale.x = .1
-        marker.scale.y = .1
-        marker.scale.z = .1
-        marker.color.a = 1.0
-        marker.color.r = 1.0
-        marker.color.g = .5
-        marker.points = points
-        self.marker_pub.publish(marker)
-
+   
         #add a covariance value here
 
 def main(args=None):
