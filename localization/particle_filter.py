@@ -3,6 +3,7 @@ from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from sensor_msgs.msg import LaserScan
 
 from rclpy.node import Node
 import numpy as np
@@ -10,7 +11,7 @@ import numpy as np
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
 import tf2_ros
 
-from geometry_msgs.msg import PoseArray, Pose, LaserScan
+from geometry_msgs.msg import PoseArray, Pose
 
 import rclpy
 
