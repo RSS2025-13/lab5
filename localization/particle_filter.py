@@ -14,6 +14,17 @@ from geometry_msgs.msg import PoseArray, Pose, LaserScan
 
 import rclpy
 
+"""
+Things that need to be done:
+
+1. Motion model and snesor model are done and they pass all the unit tests
+2. We need to publish all the things to the right places (expect significant debugging)
+3. We implemented the mel_average function but we are not sure if it is correct
+4. We implemented the pose_callback function but we are not sure if it is correct
+5. We added inimai's publish_average_pose function but we are not sure if it is correct
+
+"""
+
 class ParticleFilter(Node):
 
     def __init__(self):
