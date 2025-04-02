@@ -99,6 +99,7 @@ class ParticleFilter(Node):
         self.listener = tf2_ros.TransformListener(self.buffer, self)
 
     def get_particle_poses(self):
+        # self.get_logger().info(f"par pose {self.particle_poses}")
         poses = []
         for i in range(len(self.particle_poses)):
             particle = self.particle_poses[i, :]
@@ -130,6 +131,8 @@ class ParticleFilter(Node):
 
         average_position = np.mean(xys, axis=0)
         average_angle = np.arctan2(np.sum(np.sin(angles)), np.sum(np.cos(angles)))
+        # self.get_logger().info(f"avg_angle {average_angle}")
+        # self.get_logger().info(f"angle {angles}")
         
         average_pose = np.hstack((average_position, average_angle))
         return average_pose, average_angle
@@ -150,7 +153,7 @@ class ParticleFilter(Node):
         msg.pose.pose.orientation.w = np.cos(avg_angle / 2)
 
         msg.child_frame_id = '/base_link'
-        self.odom_pub.publish(msg)
+        #self.odom_pub.publish(msg)
 
         obj = geometry_msgs.msg.TransformStamped()
         obj.header.frame_id = '/map'
@@ -166,6 +169,7 @@ class ParticleFilter(Node):
         obj.transform.rotation.w = np.cos(avg_angle / 2)
 
         self.broadcaster.sendTransform(obj)
+        self.odom_pub.publish(msg)
 
         try:
             tf_world_to_car: geometry_msgs.msg.TransformStamped = self.buffer.lookup_transform('map', 'base_link',
@@ -221,8 +225,8 @@ class ParticleFilter(Node):
         if np.count_nonzero(weights) < particles_to_maintain: 
             return
 
-        particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights, replace=True)
-        self.particle_poses = self.particle_poses[particle_samples_idxs,:] + np.random.normal(0, 0.1, self.particle_poses.shape)
+        particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights)
+        self.particle_poses = self.particle_poses[particle_samples_idxs,:] #+ np.random.normal(0, 0.1, self.particle_poses.shape)
 
         self.publish_average_pose()
 
@@ -230,6 +234,7 @@ class ParticleFilter(Node):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         angle = 2 * np.arctan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+        theta = angle
 
         self.get_logger().info(f"first pose at: {x}, {y}, {angle}")
 
@@ -238,10 +243,12 @@ class ParticleFilter(Node):
             normalized_angle = (angle + np.pi) % (2 * np.pi) - np.pi
             return normalized_angle
         
-        x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
-        y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
-        theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
-        theta = np.apply_along_axis(normalize_angle, axis=0, arr=theta)
+        # x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
+        # y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
+        # theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
+        x = np.full((self.num_particles, 1), x)
+        y = np.full((self.num_particles, 1), y)
+        theta = np.full((self.num_particles, 1), theta)
 
         self.particle_poses = np.hstack((x, y, theta))
             
