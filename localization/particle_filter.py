@@ -125,10 +125,10 @@ class ParticleFilter(Node):
         self.odometry = [msg.twist.twist.linear.x*self.dT, msg.twist.twist.linear.y*self.dT, msg.twist.twist.angular.z*self.dT]
    
     def pose_callback(self, msg):
-        msg_frame_pos = msg.pose.position
+        msg_frame_pos = msg.pose.pose.position
         msg_frame_pos = [msg_frame_pos.x, msg_frame_pos.y, msg_frame_pos.z]
 
-        msg_frame_quat = msg.pose.orientation
+        msg_frame_quat = msg.pose.pose.orientation
         msg_frame_quat = [msg_frame_quat.x, msg_frame_quat.y,
                             msg_frame_quat.z, msg_frame_quat.w]
         (roll, pitch, yaw) = euler_from_quaternion(msg_frame_quat)
