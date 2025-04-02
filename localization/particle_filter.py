@@ -2,14 +2,15 @@ from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 from rclpy.node import Node
 import numpy as np
 
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
+import tf2_ros
 
-from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import PoseArray, Pose, LaserScan
 
 import rclpy
 
@@ -31,9 +32,11 @@ class ParticleFilter(Node):
         #     information, and *not* use the pose component.
        
         self.declare_parameter('odom_topic', "/odom")
+        self.declare_parameter('base_link_topic', "/base_link_pf")
         self.declare_parameter('scan_topic', "/scan")
 
         scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
+        base_link_topic = self.get_parameter("base_link_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic,
@@ -44,6 +47,9 @@ class ParticleFilter(Node):
                                                  self.odom_callback,
                                                  1)
 
+        self.base_link_sub = self.create_subscription(Odometry, base_link_topic,
+                                                 self.base_link_callback,
+                                                 1)
         #  *Important Note #2:* You must respond to pose
         #     initialization requests sent to the /initialpose
         #     topic. You can test that this works properly using the
@@ -63,10 +69,11 @@ class ParticleFilter(Node):
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
         self.debug_particles = self.create_publisher(PoseArray, "/pf/particles", 1)
+        self.base_link_pub = self.create_publisher()
         self.timer = self.create_timer(self.dT, self.timer_callback)
 
         # Initialize the models
-        self.motion_model = MotionModel(self,std_dev=0.05)
+        self.motion_model = MotionModel(self,std_dev_=0.05)
         self.sensor_model = SensorModel(self)
 
         self.get_logger().info("=============+READY+=============")
@@ -95,6 +102,7 @@ class ParticleFilter(Node):
             particle_msg = PoseArray()
             particle_msg.header.frame_id = self.particle_filter_frame
             particle_msg.header.stamp = self.get_clock().now().to_msg()
+
             poses = []
             for p in self.particles:
                 pose = Pose()
@@ -103,7 +111,12 @@ class ParticleFilter(Node):
                 pose.orientation = quaternion_from_euler(0, 0, p[2])
                 poses.append(pose)
             particle_msg.poses = poses
-            self.debug_particles.publish(particle_msg)            
+            self.debug_particles.publish(particle_msg)     
+
+            mle_avg = self.mle_average(self.particles, probs)      
+            pose_avg = mle_avg[0]
+            cov = mle_avg[1]
+            self.publish_average_pose(pose_avg) 
    
     def laser_callback(self, msg):
         self.scans = msg.ranges
@@ -128,7 +141,7 @@ class ParticleFilter(Node):
         self.particles = np.random.multivariate_normal([x,y], covar, size=(100, 3))
         self.initiated = True
 
-    def mle_pose(particles, probs, percentile=10):
+    def mle_average(self, particles, probs, percentile=10):
         N = len(particles)
         num_top = max(1, int(N * percentile / 100))
 
@@ -165,8 +178,58 @@ class ParticleFilter(Node):
             cov += w * (delta @ delta.T)
 
         return (x_avg, y_avg, theta_avg), cov
-   
-        #add a covariance value here
+        
+    def publish_average_pose(self, pose_avg):
+
+        msg = Odometry()
+        msg.header.frame_id = '/map'
+        msg.pose.pose.position.x = pose_avg[0]
+        msg.pose.pose.position.y = pose_avg[1]
+
+        # z axis rotation
+        msg.pose.pose.orientation.x = 0.0
+        msg.pose.pose.orientation.y = 0.0
+        msg.pose.pose.orientation.z = np.sin(pose_avg[2] / 2)
+        msg.pose.pose.orientation.w = np.cos(pose_avg[2] / 2)
+
+        msg.child_frame_id = '/base_link'
+        self.odom_pub.publish(msg)
+
+        obj = geometry_msgs.msg.TransformStamped()
+        obj.header.frame_id = '/map'
+        obj.child_frame_id = '/base_link_pf'
+
+        obj.transform.translation.x = pose_avg[0]
+        obj.transform.translation.y = pose_avg[1]
+        obj.transform.translation.z = 0.0
+
+        obj.transform.rotation.x = 0.0
+        obj.transform.rotation.y = 0.0
+        obj.transform.rotation.z = np.sin(pose_avg[2] / 2)
+        obj.transform.rotation.w = np.cos(pose_avg[2] / 2)
+
+        self.broadcaster.sendTransform(obj)
+
+        try:
+            tf_world_to_car: geometry_msgs.msg.TransformStamped = self.buffer.lookup_transform('map', 'base_link',
+                                                                                rclpy.time.Time())
+            
+            x_expected = tf_world_to_car.transform.translation.x
+            y_expected = tf_world_to_car.transform.translation.y
+            angle_expected = 2 * np.arctan2(tf_world_to_car.transform.rotation.z, tf_world_to_car.transform.rotation.w)
+
+            distance_error_msg = Float32()
+            distance_error_msg.data = np.sqrt((x_expected - pose_avg[0])**2 + (y_expected - pose_avg[1])**2)
+            
+            angle_error_msg = Float32()
+            angle_error_msg.data = angle_expected - pose_avg[2]
+
+            self.dist_error_pub.publish(distance_error_msg)
+            self.angle_error_pub.publish(angle_error_msg)
+
+        except tf2_ros.TransformException:
+            self.get_logger().info('no transform from world to base_link_gt found')
+            return
 
 def main(args=None):
     rclpy.init(args=args)
