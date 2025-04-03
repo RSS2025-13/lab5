@@ -243,14 +243,14 @@ class ParticleFilter(Node):
             normalized_angle = (angle + np.pi) % (2 * np.pi) - np.pi
             return normalized_angle
         
-        # if not self.motion_model.deterministic:
-        #     x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
-        #     y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
-        #     theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
-        # else:
-        x = np.full((self.num_particles, 1), x)
-        y = np.full((self.num_particles, 1), y)
-        theta = np.full((self.num_particles, 1), theta)
+        if not self.motion_model.deterministic:
+            x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
+            y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
+            theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
+        else:
+            x = np.full((self.num_particles, 1), x)
+            y = np.full((self.num_particles, 1), y)
+            theta = np.full((self.num_particles, 1), theta)
 
         self.particle_poses = np.hstack((x, y, theta))
             
