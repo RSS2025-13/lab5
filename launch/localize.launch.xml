@@ -3,7 +3,7 @@
         <param from="$(find-pkg-share localization)/params.yaml"/>
     </node>
     <node pkg="localization" exec="wall_follower" name="wall_follower" output="screen">
-        <param from="$(find-pkg-share wall_follower)/params.yaml"/>
+        <param from="$(find-pkg-share localization)/params.yaml"/>
     </node>
     <!-- <node pkg="localization" exec="safety_controller" name="safety_controller" output="screen">
     </node> -->

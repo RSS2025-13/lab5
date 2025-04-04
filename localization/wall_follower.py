@@ -4,10 +4,10 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
-from visualization_msgs.msg import Marker
+#from visualization_msgs.msg import Marker
 from rcl_interfaces.msg import SetParametersResult
-from robot_wall_follower.evaluations import Evaluations
-from robot_wall_follower.visualization_tools import VisualizationTools
+#from robot_wall_follower.evaluations import Evaluations
+#from robot_wall_follower.visualization_tools import VisualizationTools
 import matplotlib.pyplot as plt
 from pathlib import Path
 import os
@@ -45,7 +45,7 @@ class WallFollower(Node):
         self.add_on_set_parameters_callback(self.parameters_callback)
   
         # TODO: Initialize your publishers and subscribers here
-        self.line_pub = self.create_publisher(Marker, self.WALL_TOPIC, 1)
+        #self.line_pub = self.create_publisher(Marker, self.WALL_TOPIC, 1)
 
         self.scan_subscriber = self.create_subscription(LaserScan, self.SCAN_TOPIC, self.listener_callback, 10)
         self.drive_publisher = self.create_publisher(AckermannDriveStamped, self.DRIVE_TOPIC, 10)
@@ -62,7 +62,7 @@ class WallFollower(Node):
         self.get_logger().info(f'kd: "{self.kd}"')
         self.get_logger().info(f'v2')
 
-        self.evals = Evaluations()
+        #self.evals = Evaluations()
 
         # Add these new attributes for plotting
         self.distances = []
@@ -142,7 +142,7 @@ class WallFollower(Node):
             d = d*factor
         
         #update evals
-        self.evals.update(d, self.DESIRED_DISTANCE)
+        #self.evals.update(d, self.DESIRED_DISTANCE)
 
         #Determine error and PID controller
         error = (self.DESIRED_DISTANCE - d) * (-1 if self.SIDE == 1 else 1)
@@ -163,8 +163,8 @@ class WallFollower(Node):
         self.previous_error = error
 
         #Visualization
-        y_visual = coeffs[0] * new_x_array + coeffs[1]
-        VisualizationTools.plot_line(new_x_array, y_visual, self.line_pub, frame="/laser")
+        #y_visual = coeffs[0] * new_x_array + coeffs[1]
+        #VisualizationTools.plot_line(new_x_array, y_visual, self.line_pub, frame="/laser")
 
         return u_t
     
