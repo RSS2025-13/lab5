@@ -116,28 +116,6 @@ class SensorModel:
         self.sensor_model_table = self.alpha_hit * p_hit + self.alpha_short * p_short + self.alpha_max * p_max + self.alpha_rand * p_rand
         self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
 
-        # for d in range(self.table_width):
-        #     p_hit_column = np.zeros(self.table_width)
-        #     for zk in range(self.table_width):
-        #         p_hit = self.alpha_hit/(np.sqrt(2*np.pi*self.sigma_hit**2))*np.exp(-(zk-d)**2/(2*self.sigma_hit**2))
-        #         p_hit_column[zk] = p_hit
-        #         if zk > 0 and zk <= d:
-        #             p_short = self.alpha_short*2/d*(1-zk/d)
-        #         else:
-        #             p_short = 0
-        #         if zk == self.table_width-1:
-        #             p_max = 1
-        #         else:
-        #             p_max = 0
-        #         p_rand = 1/(self.table_width-1)
-        #         self.sensor_model_table[zk,d] = p_short + p_max + p_rand #everything but to-be-normed p_hit
-        #     #now, normalize p_hit across zk values:
-        #     normed_p_hit_column = p_hit_column/sum(p_hit_column)
-        #     #add normalized distribution to table
-        #     self.sensor_model_table[:,d] += normed_p_hit_column
-        #     #normalize entire column, with total distribution
-        #     self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/sum(self.sensor_model_table[:,d])
-
     def evaluate(self, particles, observation):
         """
         Evaluate how likely each particle is given
@@ -170,7 +148,7 @@ class SensorModel:
         # This produces a matrix of size N x num_beams_per_particle 
 
         def clip_to_zmax(arr):
-            return np.floor(np.clip(arr,0,z_max)).astype(int)
+            return np.clip(arr,0,z_max).astype(int)
 
         scans = self.scan_sim.scan(particles) #NxM, where M is num_beams_per_particle
         z_max = self.table_width - 1
@@ -182,11 +160,18 @@ class SensorModel:
         observation = clip_to_zmax(observation)
 
         #????
-        idxs = (scans, observation)
-        all_probs = self.sensor_model_table[idxs]
-        # multiply probs for cumulative likelihood for each particle
-        probs = np.prod(all_probs, axis=1)
-        return probs
+        # idxs = (scans, observation)
+        # all_probs = self.sensor_model_table[idxs]
+        # # multiply probs for cumulative likelihood for each particle
+        # probs = np.prod(all_probs, axis=1)
+        # return probs
+
+        probabilities = []
+        for scan in scans:
+            probability = np.prod(self.sensor_model_table[observation, scan])
+            probabilities.append(probability)
+            
+        return np.array(probabilities)
 
         ####################################
 
