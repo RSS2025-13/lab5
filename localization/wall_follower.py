@@ -86,6 +86,7 @@ class WallFollower(Node):
         
         ads_msg.drive.speed = self.VELOCITY
         #ads_msg.drive.steering_angle = np.pi/4
+        #self.get_logger().info(f'msg status: {msg}')
         ads_msg.drive.steering_angle = self.PID_angle(laser_msg = msg, current_time = now)
 
         self.drive_publisher.publish(ads_msg)

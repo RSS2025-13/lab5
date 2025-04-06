@@ -18,12 +18,17 @@ particle_filter:
     map_topic: "/map"
     scan_topic: "/scan"
     odom_topic: "/odom"
+    pose_truth_topic: "/pose_truth"
+    initial_xyangle_topic: "/initial_xyangle"
 
     # The frame you should publish your transform to
     particle_filter_frame: "/base_link_pf"
 
     # Deterministic flag; set to true to remove all added noise
     deterministic: False
+
+    #Flag to switch functionality from calculating distance error from simulator, or from rosbag playback
+    rosbag_input: False
 
     lidar_scale_to_map_scale: 1.0
 

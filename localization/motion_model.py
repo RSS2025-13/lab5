@@ -3,14 +3,15 @@ import matplotlib.pyplot as plt
 
 class MotionModel:
 
-    def __init__(self, node, std_dev = (0.1, 0.1, np.pi/15), deterministic=False):
+    def __init__(self, node, std_dev = (0.1, 0.1, np.pi/15)):
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
 
         self.std_dev = std_dev
-        self.deterministic = deterministic
+        self.deterministic = node.deterministic
+        self.node = node
 
         ####################################
 
@@ -39,7 +40,7 @@ class MotionModel:
         def get_rot_matrix(angle):
             return np.array([[np.cos(angle), -np.sin(angle)],[np.sin(angle), np.cos(angle)]])
         
-        def get_transform_matrix(pose):
+        def get_transform_matrix(pose): #actual transformation
             mat = np.eye(3)
 
             xy = pose[:2]
@@ -66,6 +67,7 @@ class MotionModel:
         # 3N x 3 Matrix (every particles row converted to transform matrix)
         particle_txns = np.apply_along_axis(get_transform_matrix, axis=1, arr=particles)
         particle_txns = np.vstack(particle_txns)
+
         
         # apply transform from the odometry
         transform_delta = get_transform_matrix(odometry)

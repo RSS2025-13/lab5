@@ -12,7 +12,7 @@ assert rclpy
 import numpy as np
 import time
 import tf2_ros
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Float32MultiArray
 import geometry_msgs
 from sensor_msgs.msg import LaserScan
 
@@ -32,11 +32,21 @@ class ParticleFilter(Node):
         #     twist component, so you should rely only on that
         #     information, and *not* use the pose component.
         
+        self.declare_parameter('deterministic', False)
+        self.deterministic = self.get_parameter('deterministic').get_parameter_value().bool_value
+
         self.declare_parameter('odom_topic', "/odom")
         self.declare_parameter('scan_topic', "/scan")
+        self.declare_parameter('pose_truth_topic', "/pose_truth")
+        self.declare_parameter('initial_xyangle_topic', "/initial_xyangle")
+
+        self.declare_parameter('rosbag_input', False)
+        self.rosbag_input = self.get_parameter('rosbag_input').get_parameter_value().bool_value
 
         scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
+        pose_truth_topic = self.get_parameter("pose_truth_topic").get_parameter_value().string_value
+        initial_xyangle_topic = self.get_parameter("initial_xyangle_topic").get_parameter_value().string_value
 
         self.laser_sub = self.create_subscription(LaserScan, scan_topic,
                                                   self.laser_callback,
@@ -45,6 +55,18 @@ class ParticleFilter(Node):
         self.odom_sub = self.create_subscription(Odometry, odom_topic,
                                                  self.odom_callback,
                                                  1)
+        if self.rosbag_input:
+            self.pose_truth_sub = self.create_subscription(Pose, pose_truth_topic,
+                                                 self.pose_truth_callback,
+                                                 1)
+            self.initial_xyangle_sub = self.create_subscription(Float32MultiArray, initial_xyangle_topic,
+                                                                self.initial_xyangle_callback,
+                                                                1)
+
+            self.x_expected = None
+            self.y_expected = None
+            self.angle_expected = None
+            self.xyangle0 = None
 
         #  *Important Note #2:* You must respond to pose
         #     initialization requests sent to the /initialpose
@@ -64,12 +86,17 @@ class ParticleFilter(Node):
         #     "/map" frame.
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
+        self.debug_pub = self.create_publisher(Float32MultiArray, "/debug", 10)
 
         # Initialize the models
         self.motion_model = MotionModel(self)
         self.sensor_model = SensorModel(self)
 
         self.get_logger().info("=============+READY+=============")
+        #Notes-----------
+        #particles in world frame?
+        #probabilities of particles
+        #pose_truth published as expected?
 
         # Implement the MCL algorithm
         # using the sensor model and the motion model
@@ -81,13 +108,16 @@ class ParticleFilter(Node):
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
 
-        self.dist_error_pub = self.create_publisher(Float32, '/distance_error', 10)
-        self.angle_error_pub = self.create_publisher(Float32, '/angle_error', 10)
-        self.particles_pub = self.create_publisher(PoseArray, "/particles", 1)        
-        
         self.declare_parameter('num_particles', 0)
         self.num_particles = self.get_parameter('num_particles').get_parameter_value().integer_value
         self.num_beams_per_particle = self.get_parameter("num_beams_per_particle").get_parameter_value().integer_value
+
+        self.dist_error_pub = self.create_publisher(Float32, '/distance_error', 10)
+        self.angle_error_pub = self.create_publisher(Float32, '/angle_error', 10)
+        self.particles_pub = self.create_publisher(PoseArray, "/particles", 1)
+        if not self.rosbag_input:
+            self.pose_truth_pub = self.create_publisher(Pose, pose_truth_topic, 10)
+            self.initial_xyangle_pub = self.create_publisher(Float32MultiArray, initial_xyangle_topic, 1)
 
         self.ranges_laser = np.array([])
         self.particle_poses = np.array([])
@@ -99,7 +129,6 @@ class ParticleFilter(Node):
         self.listener = tf2_ros.TransformListener(self.buffer, self)
 
     def get_particle_poses(self):
-        self.get_logger().info(f"par pose: {self.particle_poses}")
         poses = []
         for i in range(len(self.particle_poses)):
             particle = self.particle_poses[i, :]
@@ -171,30 +200,58 @@ class ParticleFilter(Node):
         self.broadcaster.sendTransform(obj)
         self.odom_pub.publish(msg)
 
-        try:
-            tf_world_to_car: geometry_msgs.msg.TransformStamped = self.buffer.lookup_transform('map', 'base_link',
-                                                                                 rclpy.time.Time())
-            
-            x_expected = tf_world_to_car.transform.translation.x
-            y_expected = tf_world_to_car.transform.translation.y
-            angle_expected = 2 * np.arctan2(tf_world_to_car.transform.rotation.z, tf_world_to_car.transform.rotation.w)
+        if not self.rosbag_input:
+            try:
+                tf_world_to_car: geometry_msgs.msg.TransformStamped = self.buffer.lookup_transform('map', 'base_link',
+                                                                                    rclpy.time.Time())
+                
+                x_expected = tf_world_to_car.transform.translation.x
+                y_expected = tf_world_to_car.transform.translation.y
+                angle_expected = 2 * np.arctan2(tf_world_to_car.transform.rotation.z, tf_world_to_car.transform.rotation.w)
 
+                distance_error_msg = Float32()
+                distance_error_msg.data = np.sqrt((x_expected - avg_pose[0])**2 + (y_expected - avg_pose[1])**2)
+                
+                angle_error_msg = Float32()
+                angle_error_msg.data = angle_expected - avg_angle
+                #-------------
+                pose_truth_msg = Pose()
+                
+                pose_truth_msg.position.x = x_expected
+                pose_truth_msg.position.y = y_expected
+
+                pose_truth_msg.orientation.x = 0.0
+                pose_truth_msg.orientation.y = 0.0
+                pose_truth_msg.orientation.z = np.sin(angle_expected / 2)
+                pose_truth_msg.orientation.w = np.cos(angle_expected / 2)
+
+                self.pose_truth_pub.publish(pose_truth_msg)
+                #-------------
+
+            except tf2_ros.TransformException:
+                self.get_logger().info('no transform from world to base_link_gt found')
+                return
+        else:
+            if self.x_expected is None:
+                self.get_logger().info("self.x_expected was not given a value")
+                return
             distance_error_msg = Float32()
-            distance_error_msg.data = np.sqrt((x_expected - avg_pose[0])**2 + (y_expected - avg_pose[1])**2)
+            distance_error_msg.data = np.sqrt((self.x_expected - avg_pose[0])**2 + (self.y_expected - avg_pose[1])**2)
             
             angle_error_msg = Float32()
-            angle_error_msg.data = angle_expected - avg_angle
-
-            self.dist_error_pub.publish(distance_error_msg)
-            self.angle_error_pub.publish(angle_error_msg)
-
-        except tf2_ros.TransformException:
-            self.get_logger().info('no transform from world to base_link_gt found')
-            return
+            angle_error_msg.data = self.angle_expected - avg_angle
+        
+        #regardless of input type (rosbag or null)
+        self.dist_error_pub.publish(distance_error_msg)
+        self.angle_error_pub.publish(angle_error_msg)
         
     def odom_callback(self, msg):
-        if len(self.particle_poses) == 0: 
-            return
+        if len(self.particle_poses) == 0:
+            if self.rosbag_input:
+                if not self.pose_callback():
+                    return
+            else:
+                return
         curr_time = time.perf_counter()
         dT = curr_time - self.previous_time
 
@@ -203,13 +260,20 @@ class ParticleFilter(Node):
         angle_vel = msg.twist.twist.angular.z
         
         odom = np.array([x_vel*dT, y_vel*dT, angle_vel*dT])
+        self.get_logger().info(f'odom: {odom}')
         self.particle_poses = self.motion_model.evaluate(self.particle_poses, odom)
 
+        #self.get_logger().info(f'n1: {min(noise[0]), max(noise[0])}\nn2: {min(noise[1]), max(noise[1])}\nn3: {min(noise[2]), max(noise[2])}')
         self.publish_average_pose()
         self.previous_time = curr_time
 
     def laser_callback(self, msg):
-        if len(self.particle_poses) == 0: return
+        if len(self.particle_poses) == 0:
+            if self.rosbag_input:
+                if not self.pose_callback(): #if this returns false, in which case the particles were not defined
+                    return
+            else:
+                return
 
         downsampled_indices = np.linspace(0, len(msg.ranges)-1, self.num_beams_per_particle).astype(int)
         downsampled_laser_ranges = np.array(msg.ranges)[downsampled_indices]
@@ -224,26 +288,46 @@ class ParticleFilter(Node):
 
         if np.count_nonzero(weights) < particles_to_maintain: 
             return
-
+        self.get_logger().info(f'weights: {weights}')
         particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights)
-        self.particle_poses = self.particle_poses[particle_samples_idxs,:] + np.random.normal(0, 0.1, self.particle_poses.shape)
+        self.particle_poses = self.particle_poses[particle_samples_idxs,:]
+        if not self.deterministic:
+            self.particle_poses += np.random.normal(0, 0.1, self.particle_poses.shape)
 
         self.publish_average_pose()
+    
+    def pose_truth_callback(self, msg):
+        self.x_expected = msg.position.x
+        self.y_expected = msg.position.y
+        self.angle_expected = 2*np.arcsin(msg.orientation.z)
+        
+    def initial_xyangle_callback(self, msg):
+        self.xyangle0 = [msg.data[0],msg.data[1],msg.data[2]]
 
-    def pose_callback(self, msg):
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        angle = 2 * np.arctan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+    def pose_callback(self, msg=None):
+        if self.rosbag_input:
+            if msg is not None: #you clicked but we are using only std initialization, getting data from rosbag
+                return True
+            #clickable pose setting inactive when running rosbag playback
+            if self.xyangle0 is None:
+                self.get_logger().info("self.xyangle0 was not given a value")
+                return False
+            [x, y, angle] = self.xyangle0
+        else:
+            x = msg.pose.pose.position.x
+            y = msg.pose.pose.position.y
+            angle = 2 * np.arctan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+            initial_xyangle_msg = Float32MultiArray()
+            initial_xyangle_msg.data = [x,y,angle]
+            self.initial_xyangle_pub.publish(initial_xyangle_msg)
         theta = angle
-
-        self.get_logger().info(f"first pose at: {x}, {y}, {angle}")
 
         def normalize_angle(angle):
             # Normalize the angle to be within the range [-π, π]
             normalized_angle = (angle + np.pi) % (2 * np.pi) - np.pi
             return normalized_angle
         
-        if not self.motion_model.deterministic:
+        if not self.deterministic:
             x = np.random.normal(loc=x, scale=1.0, size=(self.num_particles,1))
             y = np.random.normal(loc=y, scale=1.0, size=(self.num_particles,1))
             theta = np.random.normal(loc=angle, scale=1.0, size=(self.num_particles,1))
@@ -255,6 +339,7 @@ class ParticleFilter(Node):
         self.particle_poses = np.hstack((x, y, theta))
             
         self.get_particle_poses()
+        return True
 
 
 def main(args=None):
