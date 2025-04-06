@@ -225,7 +225,7 @@ class ParticleFilter(Node):
         if np.count_nonzero(weights) < particles_to_maintain: 
             return
 
-        particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights)
+        particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights**(1/3))
         self.particle_poses = self.particle_poses[particle_samples_idxs,:] + np.random.normal(0, 0.1, self.particle_poses.shape)
 
         self.publish_average_pose()
