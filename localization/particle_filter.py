@@ -288,7 +288,7 @@ class ParticleFilter(Node):
 
         if np.count_nonzero(weights) < particles_to_maintain: 
             return
-        self.get_logger().info(f'weights: {weights}')
+
         particle_samples_idxs = np.random.choice(self.num_particles, size=self.num_particles, p=weights)
         self.particle_poses = self.particle_poses[particle_samples_idxs,:]
         if not self.deterministic:

@@ -149,6 +149,7 @@ class SensorModel:
 
         def clip_to_zmax(arr):
             return np.clip(arr,0,z_max).astype(int)
+            return np.clip(arr,0,z_max).astype(int)
 
         scans = self.scan_sim.scan(particles) #NxM, where M is num_beams_per_particle
         z_max = self.table_width - 1
@@ -170,7 +171,7 @@ class SensorModel:
         for scan in scans:
             probability = np.prod(self.sensor_model_table[observation, scan])
             probabilities.append(probability)
-           
+            
         return np.array(probabilities)
 
         ####################################
